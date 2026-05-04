@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QFont
 from src.services import AuditService
+from src.ui.widgets.receipt_activity_table import format_insercoes_resumo
 from src.utils.logger import get_logger
 from datetime import datetime
 
@@ -50,6 +51,7 @@ class AuditLogView(QWidget):
         self.action_filter = QComboBox()
         self.action_filter.addItem("Todas as ações")
         self.action_filter.addItem("Upload")
+        self.action_filter.addItem("Recebimento → planilha")
         self.action_filter.addItem("Aprovação")
         self.action_filter.addItem("Rejeição")
         self.action_filter.addItem("Login")
@@ -199,6 +201,9 @@ class AuditLogView(QWidget):
                 'reject': QColor(231, 76, 60),      # Vermelho
                 'login': QColor(243, 156, 18),      # Laranja
                 'logout': QColor(127, 140, 141),    # Cinza
+                'receipt_send_ok': QColor(46, 204, 113),
+                'receipt_send_failed': QColor(192, 57, 43),
+                'receipt_send_partial': QColor(230, 126, 34),
             }
             
             bg_color = color_map.get(action, QColor(200, 200, 200))
@@ -248,6 +253,45 @@ class AuditLogView(QWidget):
         elif formatted_log['action'] == 'upload_duplicate':
             return f"Duplicata detectada"
         
+        elif formatted_log['action'] in ('receipt_send_ok',):
+            pc = details.get('por_secao', {})
+            tb = ','.join(f"{k}:{v}" for k, v in sorted(pc.items())) if pc else '—'
+            ent = details.get('arquivo_entrada_contas') or '—'
+            cte = details.get('arquivo_entrada_ctes')
+            nf_li = details.get('arquivo_listas_nf')
+            extra = f" | Entrada: {ent}"
+            if cte:
+                extra += f" | Listas CT-e: {cte}"
+            if nf_li:
+                extra += f" | Listas NF: {nf_li}"
+            tot = details.get('total_inseridos', '')
+            base = (
+                f"Baixa {details.get('data_baixa', '')} | Total: {tot} | Por secao: {tb}{extra}"
+            )
+            ins_txt = format_insercoes_resumo(details)
+            return f"{base} | {ins_txt}" if ins_txt else base
+
+        elif formatted_log['action'] in ('receipt_send_partial',):
+            pc = details.get('por_secao', {})
+            tb = ','.join(f"{k}:{v}" for k, v in sorted(pc.items())) if pc else '—'
+            msg = details.get('mensagem_erro') or ''
+            ins_txt = format_insercoes_resumo(details)
+            frag = (
+                f"Baixa {details.get('data_baixa', '')} | Secoes: {tb} | "
+                f"{str(msg)[:140]}"
+            )
+            return f"{frag} | {ins_txt}" if ins_txt else frag
+
+        elif formatted_log['action'] in ('receipt_send_failed',):
+            et = details.get('etapa') or ''
+            pref = f"[{et}] " if et else ""
+            msg = details.get('mensagem_erro') or details.get('erro') or formatted_log.get('mensagem') or ''
+            base = f"{pref}Baixa {details.get('data_baixa', '')}: {str(msg)[:180]}"
+            ins_txt = format_insercoes_resumo(details)
+            if ins_txt:
+                return f"Inserido antes da falha: {ins_txt} | {base}"
+            return base
+
         elif formatted_log['action'] in ['approve', 'reject']:
             comment = details.get('comment', details.get('reason', 'Sem comentário'))
             return f"Motivo: {comment[:100]}..." if len(str(comment)) > 100 else f"Motivo: {comment}"
@@ -269,14 +313,20 @@ class AuditLogView(QWidget):
         if action_text != "Todas as ações":
             action_map = {
                 "Upload": "upload",
+                "Recebimento → planilha": "__receipt__",
                 "Aprovação": "approve",
                 "Rejeição": "reject",
                 "Login": "login",
                 "Logout": "logout"
             }
             action_filter_value = action_map.get(action_text)
-            if action_filter_value:
-                filtered_logs = [log for log in filtered_logs 
+            if action_filter_value == "__receipt__":
+                filtered_logs = [
+                    log for log in filtered_logs
+                    if str(log.get("action", "")).startswith("receipt_")
+                ]
+            elif action_filter_value:
+                filtered_logs = [log for log in filtered_logs
                                if log['action'] == action_filter_value or log['action'] == f"{action_filter_value}_duplicate"]
         
         # Filtro por usuário

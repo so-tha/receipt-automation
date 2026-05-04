@@ -181,3 +181,60 @@ class AuthenticationService:
         except Exception as e:
             logger.error(f"User deactivation error: {str(e)}")
             return False
+    
+    @staticmethod
+    def ensure_user_record_for_audit(current_user) -> Optional[str]:
+        """
+        Garante que existe um usuário na tabela local (SQLite) para gravar Auditoria (FK audit_logs.user_id).
+        Para login Azure usa o OID como id do User quando válido como UUID.
+        """
+        if not current_user:
+            return None
+        import uuid as uuid_lib
+        from src.core.models import User as LocalUser
+        
+        try:
+            oid = getattr(current_user, 'id', None)
+            email = getattr(current_user, 'email', None)
+            name = getattr(current_user, 'name', None)
+            if isinstance(current_user, dict):
+                oid = current_user.get('oid') or oid
+                email = current_user.get('email') or email
+                name = current_user.get('name') or name
+            
+            uid = None
+            if oid and isinstance(oid, str) and len(oid) == 36:
+                uid = oid
+            if email:
+                existing = AuthenticationService.get_user_by_email(email)
+                if existing:
+                    return existing.id
+            
+            if not uid:
+                uid = str(uuid_lib.uuid5(uuid_lib.NAMESPACE_DNS, email or str(oid) or 'local'))
+            
+            session = get_session()
+            existing = session.query(LocalUser).filter_by(id=uid).first()
+            if existing:
+                session.close()
+                return existing.id
+            
+            nu = LocalUser(
+                id=uid,
+                email=email or f"azure-{uid[:8]}@local.audit",
+                name=name or (email.split('@')[0] if email else 'Usuario Azure'),
+                password_hash=None,
+                azure_id=str(oid or '')[:255],
+            )
+            session.add(nu)
+            session.commit()
+            session.close()
+            logger.info(f"Usuario local criado/atualizado para auditoria: {uid}")
+            return uid
+        except Exception as e:
+            logger.error(f"ensure_user_record_for_audit error: {str(e)}")
+            try:
+                session.close()
+            except Exception:
+                pass
+            return None

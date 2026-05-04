@@ -165,7 +165,7 @@ class LoginWorker(QThread):
                         'name': decoded.get('name'),
                         'oid': decoded.get('oid')
                     }
-                    logger.info(f"✅ Login bem-sucedido: {user_info['email']}")
+                    logger.info(f"[OK] Login bem-sucedido: {user_info['email']}")
                     print(f"[DEBUG] User Info: {user_info}")
                     self.success.emit(user_info)
                 except Exception as e:
@@ -295,13 +295,16 @@ class AzureLoginDialog(QDialog):
         """Login bem-sucedido"""
         logger.info("Login bem-sucedido!")
         print(f"[DEBUG] on_login_success chamado com: {user_info}")
-        self.user_info = user_info
         self.access_token = self.login_worker.access_token
+        
+        # Incluir o access_token no user_info para facilitar o uso
+        user_info['access_token'] = self.access_token
+        self.user_info = user_info
         
         QMessageBox.information(
             self,
             "Login Bem-Sucedido",
-            f"Bem-vindo, {user_info.get('email', 'Usuário')}!"
+            f"Bem-vindo, {user_info.get('email', 'Usuario')}!"
         )
         
         self.accept()

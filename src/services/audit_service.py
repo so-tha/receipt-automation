@@ -11,6 +11,13 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Envios para planilha (processar recebimento)
+RECEIPT_SEND_ACTIONS = (
+    "receipt_send_ok",
+    "receipt_send_failed",
+    "receipt_send_partial",
+)
+
 
 class AuditService:
     """Service for managing audit logs."""
@@ -172,6 +179,57 @@ class AuditService:
         return AuditService.get_all_audit_logs(limit, offset)
     
     @staticmethod
+    def get_receipt_send_dashboard_stats() -> Dict[str, int]:
+        """
+        Contagens de envios de recebimento para planilha (auditoria).
+        """
+        empty = {"total": 0, "ok": 0, "partial": 0, "failed": 0}
+        try:
+            session = get_session()
+            q = session.query(AuditLog).filter(AuditLog.action.in_(RECEIPT_SEND_ACTIONS))
+            empty["total"] = q.count()
+            empty["ok"] = session.query(AuditLog).filter(
+                AuditLog.action == "receipt_send_ok"
+            ).count()
+            empty["partial"] = session.query(AuditLog).filter(
+                AuditLog.action == "receipt_send_partial"
+            ).count()
+            empty["failed"] = session.query(AuditLog).filter(
+                AuditLog.action == "receipt_send_failed"
+            ).count()
+            session.close()
+            return empty
+        except Exception as e:
+            logger.error(f"Receipt dashboard stats error: {str(e)}")
+            try:
+                session.close()
+            except Exception:
+                pass
+            return empty
+
+    @staticmethod
+    def get_recent_receipt_audit_logs(limit: int = 50) -> List[AuditLog]:
+        """Últimos registros de envio ao OneDrive (processar recebimento)."""
+        try:
+            session = get_session()
+            logs = (
+                session.query(AuditLog)
+                .filter(AuditLog.action.in_(RECEIPT_SEND_ACTIONS))
+                .order_by(AuditLog.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+            session.close()
+            return logs
+        except Exception as e:
+            logger.error(f"Get recent receipt logs error: {str(e)}")
+            try:
+                session.close()
+            except Exception:
+                pass
+            return []
+
+    @staticmethod
     def format_log(log: AuditLog) -> Dict[str, Any]:
         """
         Formata um log de auditoria para exibição.
@@ -196,7 +254,7 @@ class AuditService:
             filename = 'N/A'
             file_size = None
             if log.details and isinstance(log.details, dict):
-                filename = log.details.get('filename', 'N/A')
+                filename = log.details.get('filename') or log.details.get('planilha', 'N/A')
                 file_size = log.details.get('file_size')
             
             # Formatar data/hora

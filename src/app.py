@@ -69,7 +69,7 @@ class LocalLifeApplication:
                 
                 if result == QDialog.DialogCode.Accepted:
                     current_user = login_dialog.get_user_info()
-                    logger.info(f"✅ Usuário autenticado: {current_user['email']}")
+                    logger.info(f"[OK] Usuario autenticado: {current_user['email']}")
                 else:
                     logger.warning("Usuário cancelou o login")
                     return 1

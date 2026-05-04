@@ -57,7 +57,7 @@ def _run_migrations():
                     ADD COLUMN is_locked BOOLEAN DEFAULT 0
                 '''))
                 conn.commit()
-                print("✓ Adicionada coluna 'is_locked' à tabela 'reports'")
+                print("[OK] Adicionada coluna 'is_locked' a tabela 'reports'")
             
             # Add extracted_data column if missing (JSON storage)
             if 'extracted_data' not in columns:
@@ -66,7 +66,7 @@ def _run_migrations():
                     ADD COLUMN extracted_data TEXT
                 '''))
                 conn.commit()
-                print("✓ Adicionada coluna 'extracted_data' à tabela 'reports'")
+                print("[OK] Adicionada coluna 'extracted_data' a tabela 'reports'")
             
             # Add file_hash column if missing (SHA256 for deduplication)
             if 'file_hash' not in columns:
@@ -75,7 +75,7 @@ def _run_migrations():
                     ADD COLUMN file_hash VARCHAR(64)
                 '''))
                 conn.commit()
-                print("✓ Adicionada coluna 'file_hash' à tabela 'reports'")
+                print("[OK] Adicionada coluna 'file_hash' a tabela 'reports'")
         
         # Check if 'audit_logs' table exists
         if 'audit_logs' in inspector.get_table_names():
@@ -88,7 +88,7 @@ def _run_migrations():
                     ADD COLUMN details TEXT
                 '''))
                 conn.commit()
-                print("✓ Adicionada coluna 'details' à tabela 'audit_logs'")
+                print("[OK] Adicionada coluna 'details' a tabela 'audit_logs'")
 
 
 def get_session() -> Session:

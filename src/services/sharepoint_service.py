@@ -475,15 +475,103 @@ class SharePointService:
             success, response = self._make_request("DELETE", endpoint)
             
             if success:
-                logger.info(f"✅ Arquivo deletado: {file_id}")
+                logger.info(f"[OK] Arquivo deletado: {file_id}")
                 return True
             else:
-                logger.error(f"❌ Erro ao deletar: {response}")
+                logger.error(f"Erro ao deletar: {response}")
                 return False
         
         except Exception as e:
-            logger.error(f"❌ Erro ao deletar: {str(e)}")
+            logger.error(f"Erro ao deletar: {str(e)}")
             return False
+    
+    def adicionar_linhas_excel(
+        self,
+        file_path: str,
+        sheet_name: str,
+        rows: list
+    ) -> tuple:
+        """
+        Adiciona linhas diretamente em uma planilha Excel no SharePoint.
+        Usa a API Excel do Microsoft Graph - nao precisa baixar/re-subir o arquivo.
+        
+        Args:
+            file_path: Caminho do arquivo (ex: "/Documentos/PLANILHA.xlsx")
+            sheet_name: Nome da aba
+            rows: Lista de linhas, cada linha e uma lista de valores
+            
+        Returns:
+            Tupla (sucesso, mensagem)
+        """
+        try:
+            if not rows:
+                return False, "Nenhuma linha para adicionar"
+            
+            if not self.drive_id:
+                return False, "Drive ID nao configurado. Execute get_site_info() primeiro."
+            
+            logger.info(f"Adicionando {len(rows)} linhas em {file_path} / {sheet_name}")
+            
+            file_path_clean = file_path.strip("/")
+            
+            # 1. Obter a planilha usada para saber a ultima linha
+            endpoint = f"/drives/{self.drive_id}/root:/{file_path_clean}:/workbook/worksheets/{sheet_name}/usedRange"
+            success, response = self._make_request("GET", endpoint, timeout=60)
+            
+            if not success:
+                logger.warning(f"Nao foi possivel obter range usado: {response}")
+                start_row = 2
+            else:
+                row_count = response.get("rowCount", 1)
+                start_row = row_count + 1
+            
+            logger.info(f"Inserindo a partir da linha {start_row}")
+            
+            # 2. Determinar o range para inserir
+            num_cols = len(rows[0]) if rows else 1
+            num_rows = len(rows)
+            
+            def col_letter(n):
+                result = ""
+                while n > 0:
+                    n, remainder = divmod(n - 1, 26)
+                    result = chr(65 + remainder) + result
+                return result
+            
+            end_col = col_letter(num_cols)
+            end_row = start_row + num_rows - 1
+            range_address = f"A{start_row}:{end_col}{end_row}"
+            
+            logger.info(f"Range de destino: {range_address}")
+            
+            # 3. Inserir os dados usando PATCH no range
+            endpoint = f"/drives/{self.drive_id}/root:/{file_path_clean}:/workbook/worksheets/{sheet_name}/range(address='{range_address}')"
+            
+            data = {"values": rows}
+            
+            url = f"{self.GRAPH_BASE}{endpoint}"
+            headers = self._get_headers()
+            
+            response = requests.patch(
+                url,
+                json=data,
+                headers=headers,
+                timeout=120
+            )
+            
+            if response.status_code in [200, 201]:
+                msg = f"Adicionadas {num_rows} linhas no range {range_address}"
+                logger.info(f"[OK] {msg}")
+                return True, msg
+            else:
+                error_msg = response.text[:500] if response.text else response.reason
+                logger.error(f"Erro ao inserir dados: {response.status_code} - {error_msg}")
+                return False, f"Erro {response.status_code}: {error_msg}"
+        
+        except Exception as e:
+            msg = f"Erro ao adicionar linhas: {str(e)}"
+            logger.error(msg)
+            return False, msg
 
 
 # ============================================================================
