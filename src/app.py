@@ -60,6 +60,7 @@ class LocalLifeApplication:
             # Se authentication ativada, pedir login
             current_user = None
             if config_obj.AUTHENTICATION_ENABLED:
+                logger.info("Modo autenticação: Azure AD (AUTH_ENABLED ligado).")
                 logger.info("Authentication ativada - solicitando login...")
                 
                 # Abrir diálogo de login
@@ -73,6 +74,11 @@ class LocalLifeApplication:
                 else:
                     logger.warning("Usuário cancelou o login")
                     return 1
+            else:
+                logger.info(
+                    "Modo autenticação: desligado (sem tela de login). "
+                    "Para exigir Azure AD, defina AUTH_ENABLED=true no .env na mesma pasta do .exe."
+                )
             
             # Abrir janela principal
             logger.info("Abrindo MainWindow...")

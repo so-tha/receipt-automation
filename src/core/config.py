@@ -4,23 +4,18 @@ Manages environment variables and application settings.
 """
 
 import os
-import sys
 from pathlib import Path
 from datetime import timedelta
-from dotenv import load_dotenv
+
+from src.bootstrap_env import app_runtime_root, load_dotenv_from_app_dir
 
 
-def _app_root() -> Path:
-    """Raiz do projeto em dev; pasta do .exe após empacotar com PyInstaller."""
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parent.parent.parent
+def _env_bool(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).strip().lower() in ("1", "true", "yes", "on")
 
 
-APP_ROOT = _app_root()
-
-# .env junto ao .exe ou à raiz do projeto; não sobrescreve variáveis já definidas no SO (TI / GPO)
-load_dotenv(APP_ROOT / ".env", override=False)
+APP_ROOT = app_runtime_root()
+load_dotenv_from_app_dir()
 
 
 class Config:
@@ -47,9 +42,8 @@ class Config:
     SHAREPOINT_LIBRARY = os.getenv('SHAREPOINT_LIBRARY', 'Shared Documents')
     
     # Azure AD Configuration
-    # Set AUTH_ENABLED=true in .env to enable Azure AD authentication
-    # By default (AUTH_ENABLED=false or not set), uses demo user mode
-    AUTHENTICATION_ENABLED = os.getenv('AUTH_ENABLED', 'false').lower() == 'true'
+    # AUTH_ENABLED=true (ou 1/yes/on) ativa o login Azure; caso contrário modo demo (sem diálogo).
+    AUTHENTICATION_ENABLED = _env_bool("AUTH_ENABLED", "false")
     
     AZURE_TENANT_ID = os.getenv('AZURE_TENANT_ID', '')
     AZURE_CLIENT_ID = os.getenv('AZURE_CLIENT_ID', '')
